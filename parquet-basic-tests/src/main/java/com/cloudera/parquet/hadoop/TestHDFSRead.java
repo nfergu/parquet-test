@@ -1,7 +1,5 @@
 package com.cloudera.parquet.hadoop;
 
-import com.google.common.primitives.Bytes;
-import com.google.common.primitives.Longs;
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
@@ -12,27 +10,28 @@ import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
-import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+import org.apache.hadoop.mapreduce.lib.output.NullOutputFormat;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
 import parquet.Log;
 import parquet.example.data.Group;
-import parquet.example.data.simple.SimpleGroup;
+import parquet.hadoop.example.ExampleInputFormat;
 import parquet.hadoop.example.ExampleOutputFormat;
-import parquet.hadoop.metadata.CompressionCodecName;
 import parquet.schema.MessageType;
 import parquet.schema.MessageTypeParser;
 
 import java.io.FileReader;
 import java.io.IOException;
 
-public class TestBasicWrite extends Configured implements Tool {
+public class TestHDFSRead extends Configured implements Tool {
 
-    private static final Log LOG = Log.getLog(TestBasicWrite.class);
+    private static final Log LOG = Log.getLog(TestHDFSRead.class);
+
+    private static long total = 0;
 
     public static void main(String[] args) throws Exception {
         try {
-            int res = ToolRunner.run(new Configuration(), new TestBasicWrite(), args);
+            int res = ToolRunner.run(new Configuration(), new TestHDFSRead(), args);
             System.exit(res);
         } catch (Exception e) {
             e.printStackTrace();
@@ -42,57 +41,38 @@ public class TestBasicWrite extends Configured implements Tool {
 
     public int run(String[] args) throws Exception {
 
-        if (args.length < 3) {
-            LOG.error("Usage: " + getClass().getName() + " schemaFileLocal inputFileHDFS outputDirectoryHDFS");
+        if (args.length < 1) {
+            LOG.error("Usage: " + getClass().getName() + " inputFileHDFS");
             return 1;
         }
 
-        String schemaFile = args[0];
-        String inputFile = args[1];
-        String outputDirectory = args[2] + System.nanoTime();
-
-        FileReader fileReader = new FileReader(schemaFile);
-        String schemaContent = IOUtils.toString(fileReader);
-        fileReader.close();
-
-        MessageType schema = MessageTypeParser.parseMessageType(schemaContent);
+        String inputFile = args[0];
 
         Configuration configuration = getConf();
-        configuration.set("parquetSchema", schemaContent);
-
         Job job = new Job(configuration);
         job.setJarByClass(getClass());
         job.setJobName(getClass().getName());
         job.setMapperClass(ReadRequestMap.class);
         job.setNumReduceTasks(0);
         job.setInputFormatClass(TextInputFormat.class);
-        job.setOutputFormatClass(ExampleOutputFormat.class);
-
-        ExampleOutputFormat.setCompression(job, CompressionCodecName.SNAPPY);
-        ExampleOutputFormat.setSchema(job, schema);
+        job.setOutputFormatClass(NullOutputFormat.class);
 
         FileInputFormat.setInputPaths(job, new Path(inputFile));
-        FileOutputFormat.setOutputPath(job, new Path(outputDirectory));
 
         job.waitForCompletion(true);
+
+        LOG.info("Output: " + total);
 
         return 0;
 
     }
 
-    public static class ReadRequestMap extends Mapper<LongWritable, Text, Void, Group> {
-        private MessageType schema = null;
+    public static class ReadRequestMap extends Mapper<LongWritable, Text, Void, Void> {
         @Override
         public void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
-            if (schema == null) {
-                Configuration configuration = context.getConfiguration();
-                schema = MessageTypeParser.parseMessageType(configuration.get("parquetSchema"));
-            }
-            Group group = new SimpleGroup(schema);
             String textValue = value.toString();
             if (textValue != null && textValue.trim().length() > 0) {
-                group.add("field1", Integer.parseInt(textValue));
-                context.write(null, group);
+                total += Integer.parseInt(textValue);
             }
         }
     }

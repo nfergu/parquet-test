@@ -5,21 +5,16 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.LongWritable;
-import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
-import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
-import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.NullOutputFormat;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
 import parquet.Log;
 import parquet.example.data.Group;
-import parquet.example.data.simple.SimpleGroup;
 import parquet.hadoop.example.ExampleInputFormat;
 import parquet.hadoop.example.ExampleOutputFormat;
-import parquet.hadoop.metadata.CompressionCodecName;
 import parquet.schema.MessageType;
 import parquet.schema.MessageTypeParser;
 
@@ -29,6 +24,8 @@ import java.io.IOException;
 public class TestBasicRead extends Configured implements Tool {
 
     private static final Log LOG = Log.getLog(TestBasicRead.class);
+
+    private static long total = 0;
 
     public static void main(String[] args) throws Exception {
         try {
@@ -73,13 +70,12 @@ public class TestBasicRead extends Configured implements Tool {
 
         job.waitForCompletion(true);
 
+        LOG.info("Output: " + total);
+
         return 0;
 
     }
 
-    /*
-     * Read a Parquet record, write a Parquet record
-     */
     public static class ReadRequestMap extends Mapper<LongWritable, Group, Void, Void> {
         private MessageType schema = null;
         @Override
@@ -88,7 +84,7 @@ public class TestBasicRead extends Configured implements Tool {
                 Configuration configuration = context.getConfiguration();
                 schema = MessageTypeParser.parseMessageType(configuration.get("parquetSchema"));
             }
-            LOG.info("Read value [" + value + "]");
+            total += value.getInteger("field1", 0);
         }
     }
 

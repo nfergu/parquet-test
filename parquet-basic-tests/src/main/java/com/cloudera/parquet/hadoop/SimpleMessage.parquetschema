@@ -1,0 +1,3 @@
+message SimpleMessage {
+  required int32 field1;
+}
